@@ -420,13 +420,27 @@ btnStart.addEventListener('click', async () => {
 
     const isAlive = c => c.hp > 0;
 
-    const getTarget = (attacker, enemies) => {
-        const aliveEnemies = enemies.filter(isAlive);
-        if(aliveEnemies.length === 0) return [];
+    const getTarget = (attacker, enemies, allies) => {
+        const targetPool = attacker.tag === "HEALER" ? allies : enemies;
+        const aliveTargets = targetPool.filter(isAlive);
+        if(aliveTargets.length === 0) return [];
+
+        if (attacker.tag === "HEALER") {
+            let minHpRatio = Infinity;
+            let target = null;
+            for (const t of aliveTargets) {
+                const ratio = t.hp / t.maxHp;
+                if (ratio < minHpRatio) {
+                    minHpRatio = ratio;
+                    target = t;
+                }
+            }
+            return target ? [target] : [];
+        }
 
         // Group enemies by x
         const xGroups = {};
-        for (const e of aliveEnemies) {
+        for (const e of aliveTargets) {
             if (!xGroups[e.x]) xGroups[e.x] = [];
             xGroups[e.x].push(e);
         }
@@ -496,11 +510,13 @@ btnStart.addEventListener('click', async () => {
         }
 
         const defenders = attacker.team === 1 ? team2 : team1;
+        const allies = attacker.team === 1 ? team1 : team2;
         if (!defenders.some(isAlive)) break;
 
-        const targets = getTarget(attacker, defenders);
+        const targets = getTarget(attacker, defenders, allies);
         if (targets && targets.length > 0) {
             const isMagic = attacker.nameKey === "class_mage";
+            const isHeal = attacker.tag === "HEALER";
 
             attacker.dom.classList.add(attacker.team === 1 ? 'anim-attack-t1' : 'anim-attack-t2');
             
@@ -512,8 +528,27 @@ btnStart.addEventListener('click', async () => {
             for (const target of targets) {
                 if (!isAlive(target)) continue;
 
-                const { dmg, crit } = calcDamage(attacker, target);
-                target.hp = Math.max(0, target.hp - dmg);
+                if (isHeal) {
+                    const healAmount = attacker.atk;
+                    target.hp = Math.min(target.maxHp, target.hp + healAmount);
+
+                    const hpPercent = (target.hp / target.maxHp) * 100;
+                    target.hpBar.style.width = `${hpPercent}%`;
+                    if(hpPercent >= 30) target.hpBar.classList.remove('low');
+
+                    target.dom.classList.add('anim-heal');
+
+                    const dmgText = document.createElement('div');
+                    dmgText.className = `damage-text heal`;
+                    dmgText.innerText = `+${healAmount}`;
+                    target.dom.parentElement.appendChild(dmgText);
+                    dmgTexts.push({text: dmgText, target: target});
+
+                    logI18n('{content}', "log_heal", [simTime.toFixed(1), attacker.team, attacker.icon, attacker.nameKey, target.team, target.icon, target.nameKey, healAmount]);
+                    playHitSound = true;
+                } else {
+                    const { dmg, crit } = calcDamage(attacker, target);
+                    target.hp = Math.max(0, target.hp - dmg);
 
                 const hpPercent = (target.hp / target.maxHp) * 100;
                 target.hpBar.style.width = `${hpPercent}%`;
@@ -537,14 +572,15 @@ btnStart.addEventListener('click', async () => {
                 const critArg = crit ? "log_crit" : "log_no_crit";
                 logI18n('{content}', "log_attack", [simTime.toFixed(1), attacker.team, attacker.icon, attacker.nameKey, target.team, target.icon, target.nameKey, critArg, dmg]);
 
-                if(!isAlive(target)) {
-                    target.dom.classList.add('anim-die');
-                    logI18n('<span class="log-death">{content}</span>', "log_death", [simTime.toFixed(1), target.icon, target.nameKey]);
-                    anyoneDied = true;
+                    if(!isAlive(target)) {
+                        target.dom.classList.add('anim-die');
+                        logI18n('<span class="log-death">{content}</span>', "log_death", [simTime.toFixed(1), target.icon, target.nameKey]);
+                        anyoneDied = true;
+                    }
                 }
             }
 
-            if (isMagic) audio.playSFX(audio.magic);
+            if (isHeal || isMagic) audio.playSFX(audio.magic);
             else if (playCritSound) audio.playSFX(audio.crit);
             else if (playHitSound) audio.playSFX(audio.hit);
 
@@ -554,7 +590,7 @@ btnStart.addEventListener('click', async () => {
 
             attacker.dom.classList.remove('anim-attack-t1', 'anim-attack-t2');
             for (const dt of dmgTexts) {
-                dt.target.dom.classList.remove('anim-hit', 'anim-magic-hit');
+                dt.target.dom.classList.remove('anim-hit', 'anim-magic-hit', 'anim-heal');
                 dt.text.remove();
             }
 
@@ -623,6 +659,10 @@ function renderStatsEditor() {
             <div class="char-icon">${char.icon}</div>
             <div class="stat-editor-inputs">
                 <div class="stat-input-group">
+                    <label>HP</label>
+                    <input type="number" id="edit-hp-${key}" value="${char.hp}" min="1">
+                </div>
+                <div class="stat-input-group">
                     <label>ATK</label>
                     <input type="number" id="edit-atk-${key}" value="${char.atk}" min="1">
                 </div>
@@ -650,11 +690,13 @@ if (btnEditStats) {
 if (btnCloseStats) {
     btnCloseStats.addEventListener('click', () => {
         for (const key in CHARACTER_TEMPLATES) {
+            const hp = parseInt(document.getElementById(`edit-hp-${key}`).value);
             const atk = parseInt(document.getElementById(`edit-atk-${key}`).value);
             const def = parseInt(document.getElementById(`edit-def-${key}`).value);
             const cd = parseFloat(document.getElementById(`edit-cd-${key}`).value);
             
             updateCharacterTemplate(key, {
+                hp: isNaN(hp) ? CHARACTER_TEMPLATES[key].hp : hp,
                 atk: isNaN(atk) ? CHARACTER_TEMPLATES[key].atk : atk,
                 def: isNaN(def) ? CHARACTER_TEMPLATES[key].def : def,
                 cd: isNaN(cd) ? CHARACTER_TEMPLATES[key].cd : cd
