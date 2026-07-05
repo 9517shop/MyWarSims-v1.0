@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WarSims: Premium Edition</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Modern Typography: Inter and Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app-background">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+    </div>
+
+    <div id="game-container">
+        <!-- Top Controls -->
+        <div class="top-bar glass-panel">
+            <div class="lang-selector">
+                <select id="lang-select" onchange="switchLanguage(this.value)">
+                    <option value="zh-TW">繁體中文</option>
+                    <option value="en">English</option>
+                </select>
+            </div>
+            <div class="audio-controls">
+                <div class="control-item">
+                    <span class="icon">🎵</span>
+                    <input type="range" id="vol-bgm" min="0" max="1" step="0.05" value="0.25">
+                    <button id="toggle-bgm" class="icon-btn">🔊</button>
+                </div>
+                <div class="control-item">
+                    <span class="icon">✨</span>
+                    <input type="range" id="vol-sfx" min="0" max="1" step="0.05" value="0.25">
+                    <button id="toggle-sfx" class="icon-btn">🔊</button>
+                </div>
+            </div>
+        </div>
+
+        <header class="game-header">
+            <h1 class="title" data-i18n="title">WarSims <span class="highlight">Clash</span></h1>
+            
+            <div class="controls glass-panel">
+                <div class="control-group">
+                    <label>
+                        <span data-i18n-text="max_chars_label">Max Units (2-5): </span>
+                        <input type="number" id="num-chars" value="3" min="2" max="5">
+                    </label>
+                </div>
+                <div class="control-group">
+                    <label>
+                        <span data-i18n-text="speed_label">Speed: </span>
+                        <select id="speed-select">
+                            <option value="0.5">0.5X</option>
+                            <option value="1" selected>1X</option>
+                            <option value="2">2.0X</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="action-buttons">
+                    <button id="btn-random" class="btn btn-secondary" data-i18n="btn_random">🎲 Randomize</button>
+                    <button id="btn-start" class="btn btn-primary" disabled data-i18n="btn_start">⚔️ Start Battle</button>
+                    <button id="btn-reset" class="btn btn-danger hidden" data-i18n="btn_reset">🔄 Reset</button>
+                </div>
+            </div>
+            
+            <div class="element-legend glass-panel">
+                <span data-i18n="legend_warrior">🛡️ Warrior</span> ➔ 
+                <span data-i18n="legend_assassin">⚔️ Assassin</span> ➔ 
+                <span data-i18n="legend_archer">🏹 Archer</span> ➔
+                <span data-i18n="legend_warrior">🛡️ Warrior</span>
+            </div>
+        </header>
+
+        <main class="battlefield-container">
+            <div class="team-area team1 glass-panel">
+                <h2 class="team-name" data-i18n="team1_name">Light Faction</h2>
+                <div class="grid" id="grid-team1"></div>
+            </div>
+
+            <div class="vs-badge">
+                <span>VS</span>
+            </div>
+
+            <div class="team-area team2 glass-panel">
+                <h2 class="team-name" data-i18n="team2_name">Dark Faction</h2>
+                <div class="grid" id="grid-team2"></div>
+            </div>
+        </main>
+
+        <section class="selection-panel glass-panel" id="selection-panel">
+            <h3 data-i18n="instruction">Drag characters to the battlefield</h3>
+            <div class="character-pool" id="character-pool-container"></div>
+            <div id="selection-status" class="status-text">
+                <span data-i18n-text="selection_status">Selected: </span>
+                <span data-i18n-text="selection_none">None</span>
+            </div>
+        </section>
+
+        <section class="battle-log glass-panel">
+            <div class="log-header">
+                <h3 data-i18n="battle_log_title">Battle Log</h3>
+                <button id="btn-export" class="btn btn-small" data-i18n="btn_export">💾 Export</button>
+            </div>
+            <div id="log-content"></div>
+        </section>
+    </div>
+
+    <!-- Audio Elements -->
+    <audio id="bgm-audio" loop src="assets/audio/bgm.mp3"></audio>
+    <audio id="hit-audio" src="assets/audio/hit.mp3"></audio>
+    <audio id="crit-audio" src="assets/audio/crit.mp3"></audio>
+    <audio id="die-audio" src="assets/audio/die.mp3"></audio>
+    <audio id="magic-audio" src="assets/audio/magic.mp3"></audio>
+
+    <script src="assets/data/i18n.js"></script>
+    <script src="assets/data/characters.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
