@@ -271,6 +271,7 @@ function addCharacterToBoard(teamId, x, y, tpl, cellElem) {
         element: tpl.element,
         prefKey: tpl.prefKey,
         cd: tpl.cd,
+        tag: tpl.tag,
         id: `char-${teamId}-${Date.now()}-${Math.floor(Math.random()*1000)}`
     };
     
@@ -478,84 +479,83 @@ btnStart.addEventListener('click', async () => {
     }
 
     let simTime = 0.0;
-    let nextTiedTeamPriority = 1; // 輪流先手優先權，開局 Team 1 優先
 
     while(team1.some(isAlive) && team2.some(isAlive)) {
-        // 尋找下一個要發動攻擊的存活角色
         const living = [...team1, ...team2].filter(isAlive);
         if(living.length === 0) break;
 
-        // 依據 nextAttackTime 排序；若時間相同，則根據雙方輪流先手優先權決定，再以 ID 排序
-        living.sort((a, b) => {
-            if (Math.abs(a.nextAttackTime - b.nextAttackTime) > 0.0001) {
-                return a.nextAttackTime - b.nextAttackTime;
-            }
-            if (a.team !== b.team) {
-                return a.team === nextTiedTeamPriority ? -1 : 1;
-            }
-            return a.id.localeCompare(b.id);
-        });
+        living.sort((a, b) => a.nextAttackTime - b.nextAttackTime);
+        simTime = living[0].nextAttackTime;
 
-        const attacker = living[0];
-        simTime = attacker.nextAttackTime;
+        // 收集所有在同一時間點發動攻擊的角色（同步判定）
+        const currentAttackers = living.filter(c => Math.abs(c.nextAttackTime - simTime) <= 0.0001);
 
-        // 檢查在相同的時間點是否有其他角色也準備攻擊（即發生同時攻擊的情況）
-        const hasTie = living.slice(1).some(other => 
-            Math.abs(other.nextAttackTime - attacker.nextAttackTime) <= 0.0001
-        );
-        if (hasTie) {
-            // 只要同時間點還有角色未攻擊，就將下一順位的優先權交給對手陣營
-            // 如此一來，在人數不對等的同時攻擊結束後，下一輪的先手權自然會輪替給另一方
-            nextTiedTeamPriority = attacker.team === 1 ? 2 : 1;
+        const actions = [];
+
+        // 階段一：所有攻擊者同時鎖定目標與計算預計數值
+        for (const attacker of currentAttackers) {
+            const defenders = attacker.team === 1 ? team2 : team1;
+            const allies = attacker.team === 1 ? team1 : team2;
+            
+            if (!defenders.some(isAlive)) continue;
+
+            const targets = getTarget(attacker, defenders, allies);
+            if (targets && targets.length > 0) {
+                const isMagic = attacker.nameKey === "class_mage";
+                const isHeal = attacker.tag === "HEALER";
+
+                for (const target of targets) {
+                    if (isHeal) {
+                        actions.push({ type: 'heal', attacker, target, amount: attacker.atk, isMagic });
+                    } else {
+                        const { dmg, crit } = calcDamage(attacker, target);
+                        actions.push({ type: 'damage', attacker, target, amount: dmg, crit, isMagic });
+                    }
+                }
+            }
         }
 
-        const defenders = attacker.team === 1 ? team2 : team1;
-        const allies = attacker.team === 1 ? team1 : team2;
-        if (!defenders.some(isAlive)) break;
+        if (actions.length === 0) {
+            for (const attacker of currentAttackers) {
+                attacker.nextAttackTime = simTime + (attacker.cd || 1.0);
+            }
+            continue;
+        }
 
-        const targets = getTarget(attacker, defenders, allies);
-        if (targets && targets.length > 0) {
-            const isMagic = attacker.nameKey === "class_mage";
-            const isHeal = attacker.tag === "HEALER";
+        // 階段二：同時結算所有傷害與治療
+        let playCritSound = false;
+        let playHitSound = false;
+        let playMagicSound = false;
+        let anyoneDied = false;
+        const dmgTexts = [];
 
+        for (const attacker of currentAttackers) {
             attacker.dom.classList.add(attacker.team === 1 ? 'anim-attack-t1' : 'anim-attack-t2');
+        }
+
+        for (const action of actions) {
+            const { type, attacker, target, amount, crit, isMagic } = action;
             
-            let playCritSound = false;
-            let playHitSound = false;
-            let anyoneDied = false;
-            const dmgTexts = [];
+            if (type === 'heal') {
+                if (isAlive(target)) {
+                    target.hp = Math.min(target.maxHp, target.hp + amount);
+                }
+                target.dom.classList.add('anim-heal');
+                
+                const dmgText = document.createElement('div');
+                dmgText.className = `damage-text heal`;
+                dmgText.innerText = `+${amount}`;
+                target.dom.parentElement.appendChild(dmgText);
+                dmgTexts.push({text: dmgText, target});
 
-            for (const target of targets) {
-                if (!isAlive(target)) continue;
-
-                if (isHeal) {
-                    const healAmount = attacker.atk;
-                    target.hp = Math.min(target.maxHp, target.hp + healAmount);
-
-                    const hpPercent = (target.hp / target.maxHp) * 100;
-                    target.hpBar.style.width = `${hpPercent}%`;
-                    if(hpPercent >= 30) target.hpBar.classList.remove('low');
-
-                    target.dom.classList.add('anim-heal');
-
-                    const dmgText = document.createElement('div');
-                    dmgText.className = `damage-text heal`;
-                    dmgText.innerText = `+${healAmount}`;
-                    target.dom.parentElement.appendChild(dmgText);
-                    dmgTexts.push({text: dmgText, target: target});
-
-                    logI18n('{content}', "log_heal", [simTime.toFixed(1), attacker.team, attacker.icon, attacker.nameKey, target.team, target.icon, target.nameKey, healAmount]);
-                    playHitSound = true;
-                } else {
-                    const { dmg, crit } = calcDamage(attacker, target);
-                    target.hp = Math.max(0, target.hp - dmg);
-
-                const hpPercent = (target.hp / target.maxHp) * 100;
-                target.hpBar.style.width = `${hpPercent}%`;
-                if(hpPercent < 30) target.hpBar.classList.add('low');
+                logI18n('{content}', "log_heal", [simTime.toFixed(1), attacker.team, attacker.icon, attacker.nameKey, target.team, target.icon, target.nameKey, amount]);
+                playMagicSound = true;
+            } else {
+                target.hp = Math.max(0, target.hp - amount);
 
                 if (isMagic) {
                     target.dom.classList.add('anim-magic-hit');
+                    playMagicSound = true;
                 } else {
                     target.dom.classList.add('anim-hit');
                 }
@@ -565,42 +565,53 @@ btnStart.addEventListener('click', async () => {
 
                 const dmgText = document.createElement('div');
                 dmgText.className = `damage-text ${crit ? 'crit' : ''}`;
-                dmgText.innerText = `-${dmg}`;
+                dmgText.innerText = `-${amount}`;
                 target.dom.parentElement.appendChild(dmgText);
-                dmgTexts.push({text: dmgText, target: target});
+                dmgTexts.push({text: dmgText, target});
 
                 const critArg = crit ? "log_crit" : "log_no_crit";
-                logI18n('{content}', "log_attack", [simTime.toFixed(1), attacker.team, attacker.icon, attacker.nameKey, target.team, target.icon, target.nameKey, critArg, dmg]);
-
-                    if(!isAlive(target)) {
-                        target.dom.classList.add('anim-die');
-                        logI18n('<span class="log-death">{content}</span>', "log_death", [simTime.toFixed(1), target.icon, target.nameKey]);
-                        anyoneDied = true;
-                    }
-                }
-            }
-
-            if (isHeal || isMagic) audio.playSFX(audio.magic);
-            else if (playCritSound) audio.playSFX(audio.crit);
-            else if (playHitSound) audio.playSFX(audio.hit);
-
-            if (anyoneDied) audio.playSFX(audio.die);
-
-            await sleep((isMagic ? 500 : 200) / battleSpeed); 
-
-            attacker.dom.classList.remove('anim-attack-t1', 'anim-attack-t2');
-            for (const dt of dmgTexts) {
-                dt.target.dom.classList.remove('anim-hit', 'anim-magic-hit', 'anim-heal');
-                dt.text.remove();
-            }
-
-            if (anyoneDied) {
-                await sleep(300 / battleSpeed); 
+                logI18n('{content}', "log_attack", [simTime.toFixed(1), attacker.team, attacker.icon, attacker.nameKey, target.team, target.icon, target.nameKey, critArg, amount]);
             }
         }
 
-        // 更新該攻擊者的下一次攻擊時間
-        attacker.nextAttackTime = simTime + (attacker.cd || 1.0);
+        // 更新血條並判定死亡 (在所有傷害都結算後統一判定)
+        const uniqueTargets = [...new Set(actions.map(a => a.target))];
+        for (const target of uniqueTargets) {
+            const hpPercent = (target.hp / target.maxHp) * 100;
+            target.hpBar.style.width = `${hpPercent}%`;
+            
+            if(hpPercent < 30 && hpPercent > 0) target.hpBar.classList.add('low');
+            else target.hpBar.classList.remove('low');
+
+            if(!isAlive(target) && !target.dom.classList.contains('anim-die')) {
+                target.dom.classList.add('anim-die');
+                logI18n('<span class="log-death">{content}</span>', "log_death", [simTime.toFixed(1), target.icon, target.nameKey]);
+                anyoneDied = true;
+            }
+        }
+
+        if (playMagicSound) audio.playSFX(audio.magic);
+        else if (playCritSound) audio.playSFX(audio.crit);
+        else if (playHitSound) audio.playSFX(audio.hit);
+
+        if (anyoneDied) audio.playSFX(audio.die);
+
+        const maxDelay = actions.some(a => a.isMagic || a.type === 'heal') ? 500 : 200;
+        await sleep(maxDelay / battleSpeed); 
+
+        for (const attacker of currentAttackers) {
+            attacker.dom.classList.remove('anim-attack-t1', 'anim-attack-t2');
+            attacker.nextAttackTime = simTime + (attacker.cd || 1.0);
+        }
+
+        for (const dt of dmgTexts) {
+            dt.target.dom.classList.remove('anim-hit', 'anim-magic-hit', 'anim-heal');
+            dt.text.remove();
+        }
+
+        if (anyoneDied) {
+            await sleep(300 / battleSpeed); 
+        }
     }
 
     let winnerArg = "log_draw";
