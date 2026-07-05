@@ -290,13 +290,16 @@ function addCharacterToBoard(teamId, x, y, tpl, cellElem) {
         draggedCharId = charObj.id;
         draggedCharClass = null;
         charDom.classList.add('dragging');
-        // 為了讓拖曳圖像保留，但滑鼠下方不要卡到 DOM (避免擋住 drop 判定)
-        setTimeout(() => charDom.style.display = 'none', 0);
+        setTimeout(() => {
+            charDom.style.opacity = '0';
+            charDom.style.pointerEvents = 'none';
+        }, 0);
     });
     charDom.addEventListener('dragend', () => {
         draggedCharId = null;
         charDom.classList.remove('dragging');
-        charDom.style.display = 'block';
+        charDom.style.opacity = '1';
+        charDom.style.pointerEvents = 'auto';
     });
 
     const hpContainer = document.createElement('div');
@@ -421,16 +424,18 @@ btnStart.addEventListener('click', async () => {
 
     const isAlive = c => c.hp > 0;
 
-    const getTarget = (attacker, enemies, allies) => {
+    const getTarget = (attacker, enemies, allies, useProjected = false) => {
+        const checkAlive = c => useProjected ? c.projectedHp > 0 : c.hp > 0;
         const targetPool = attacker.tag === "HEALER" ? allies : enemies;
-        const aliveTargets = targetPool.filter(isAlive);
+        const aliveTargets = targetPool.filter(checkAlive);
         if(aliveTargets.length === 0) return [];
 
         if (attacker.tag === "HEALER") {
             let minHpRatio = Infinity;
             let target = null;
             for (const t of aliveTargets) {
-                const ratio = t.hp / t.maxHp;
+                const hp = useProjected ? t.projectedHp : t.hp;
+                const ratio = hp / t.maxHp;
                 if (ratio < minHpRatio) {
                     minHpRatio = ratio;
                     target = t;
@@ -492,6 +497,11 @@ btnStart.addEventListener('click', async () => {
 
         const actions = [];
 
+        // 初始化 Projected HP
+        for (const t of [...team1, ...team2]) {
+            t.projectedHp = t.hp;
+        }
+
         // 階段一：所有攻擊者同時鎖定目標與計算預計數值
         for (const attacker of currentAttackers) {
             const defenders = attacker.team === 1 ? team2 : team1;
@@ -499,17 +509,43 @@ btnStart.addEventListener('click', async () => {
             
             if (!defenders.some(isAlive)) continue;
 
-            const targets = getTarget(attacker, defenders, allies);
-            if (targets && targets.length > 0) {
-                const isMagic = attacker.nameKey === "class_mage";
-                const isHeal = attacker.tag === "HEALER";
+            // Warlock skill counting
+            if (attacker.nameKey === "class_warlock") {
+                attacker.attackCount = (attacker.attackCount || 0) + 1;
+            }
+            const isSkill = attacker.skillCast && (attacker.attackCount % attacker.skillCast === 0);
+            const hits = isSkill ? 1 : (attacker.multiHit || 1);
 
-                for (const target of targets) {
-                    if (isHeal) {
-                        actions.push({ type: 'heal', attacker, target, amount: attacker.atk, isMagic });
-                    } else {
-                        const { dmg, crit } = calcDamage(attacker, target);
-                        actions.push({ type: 'damage', attacker, target, amount: dmg, crit, isMagic });
+            for (let i = 0; i < hits; i++) {
+                const targets = getTarget(attacker, defenders, allies, true);
+                if (targets && targets.length > 0) {
+                    const isMagic = attacker.nameKey === "class_mage" || isSkill;
+                    const isHeal = attacker.tag === "HEALER";
+
+                    let finalTargets = targets;
+                    if (isSkill) {
+                        const mainTarget = targets[0];
+                        // 2x2 area
+                        finalTargets = defenders.filter(d => 
+                            d.projectedHp > 0 && 
+                            d.x >= mainTarget.x && d.x <= mainTarget.x + 1 &&
+                            d.y >= mainTarget.y && d.y <= mainTarget.y + 1
+                        );
+                        if (finalTargets.length === 0) finalTargets = [mainTarget];
+                    }
+
+                    for (const target of finalTargets) {
+                        if (isHeal) {
+                            const amount = attacker.atk;
+                            target.projectedHp = Math.min(target.maxHp, target.projectedHp + amount);
+                            actions.push({ type: 'heal', attacker, target, amount, isMagic });
+                        } else {
+                            let { dmg, crit } = calcDamage(attacker, target);
+                            if (isSkill) dmg *= 2; // Skill DMG x2
+                            
+                            target.projectedHp -= dmg;
+                            actions.push({ type: 'damage', attacker, target, amount: dmg, crit, isMagic, isSkill });
+                        }
                     }
                 }
             }
@@ -534,7 +570,7 @@ btnStart.addEventListener('click', async () => {
         }
 
         for (const action of actions) {
-            const { type, attacker, target, amount, crit, isMagic } = action;
+            const { type, attacker, target, amount, crit, isMagic, isSkill } = action;
             
             if (type === 'heal') {
                 if (isAlive(target)) {
@@ -553,7 +589,10 @@ btnStart.addEventListener('click', async () => {
             } else {
                 target.hp = Math.max(0, target.hp - amount);
 
-                if (isMagic) {
+                if (isSkill) {
+                    target.dom.classList.add('anim-fireball');
+                    playMagicSound = true;
+                } else if (isMagic) {
                     target.dom.classList.add('anim-magic-hit');
                     playMagicSound = true;
                 } else {
@@ -570,7 +609,12 @@ btnStart.addEventListener('click', async () => {
                 dmgTexts.push({text: dmgText, target});
 
                 const critArg = crit ? "log_crit" : "log_no_crit";
-                logI18n('{content}', "log_attack", [simTime.toFixed(1), attacker.team, attacker.icon, attacker.nameKey, target.team, target.icon, target.nameKey, critArg, amount]);
+                if (isSkill && target === action.target) {
+                    // Only log skill once per target or once total? Let's just log normally, and add skill log
+                    logI18n('{content}', "log_skill_warlock", [simTime.toFixed(1), attacker.team, attacker.icon, attacker.nameKey]);
+                } else {
+                    logI18n('{content}', "log_attack", [simTime.toFixed(1), attacker.team, attacker.icon, attacker.nameKey, target.team, target.icon, target.nameKey, critArg, amount]);
+                }
             }
         }
 
