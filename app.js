@@ -268,7 +268,6 @@ function addCharacterToBoard(teamId, x, y, tpl, cellElem) {
         maxHp: tpl.hp,
         atk: tpl.atk,
         def: tpl.def,
-        element: tpl.element,
         prefKey: tpl.prefKey,
         cd: tpl.cd,
         tag: tpl.tag,
@@ -411,15 +410,9 @@ btnStart.addEventListener('click', async () => {
     };
 
     const calcDamage = (atk, def) => {
-        let mult = 1.0;
-        if ((atk.element === "石頭" && def.element === "剪刀") ||
-            (atk.element === "剪刀" && def.element === "布") ||
-            (atk.element === "布" && def.element === "石頭")) {
-            mult = 1.5;
-        }
-        let dmg = Math.floor(atk.atk * mult) - (def.def || 0);
+        let dmg = Math.floor(atk.atk) - (def.def || 0);
         if (dmg < 1) dmg = 1;
-        return { dmg: dmg, crit: mult > 1.0 };
+        return { dmg: dmg, crit: false }; // 拔除爆擊或相剋加成，純看數值
     };
 
     const isAlive = c => c.hp > 0;

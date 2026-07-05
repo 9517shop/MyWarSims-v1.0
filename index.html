@@ -65,46 +65,49 @@
                 </div>
             </div>
             
-            <div class="element-legend glass-panel">
-                <span data-i18n="legend_warrior">🛡️ Warrior</span> ➔ 
-                <span data-i18n="legend_assassin">⚔️ Assassin</span> ➔ 
-                <span data-i18n="legend_archer">🏹 Archer</span> ➔
-                <span data-i18n="legend_warrior">🛡️ Warrior</span>
             </div>
         </header>
 
-        <main class="battlefield-container">
-            <div class="team-area team1 glass-panel">
-                <h2 class="team-name" data-i18n="team1_name">Light Faction</h2>
-                <div class="grid" id="grid-team1"></div>
+        <div class="main-layout">
+            <!-- 左邊欄：戰場與紀錄 -->
+            <div class="layout-left">
+                <main class="battlefield-container">
+                    <div class="team-area team1 glass-panel">
+                        <h2 class="team-name" data-i18n="team1_name">Light Faction</h2>
+                        <div class="grid" id="grid-team1"></div>
+                    </div>
+
+                    <div class="vs-badge">
+                        <span>VS</span>
+                    </div>
+
+                    <div class="team-area team2 glass-panel">
+                        <h2 class="team-name" data-i18n="team2_name">Dark Faction</h2>
+                        <div class="grid" id="grid-team2"></div>
+                    </div>
+                </main>
+
+                <section class="battle-log glass-panel">
+                    <div class="log-header">
+                        <h3 data-i18n="battle_log_title">Battle Log</h3>
+                        <button id="btn-export" class="btn btn-small" data-i18n="btn_export">💾 Export</button>
+                    </div>
+                    <div id="log-content"></div>
+                </section>
             </div>
 
-            <div class="vs-badge">
-                <span>VS</span>
+            <!-- 右邊欄：角色拖曳池 -->
+            <div class="layout-right">
+                <section class="selection-panel glass-panel" id="selection-panel">
+                    <h3 data-i18n="instruction">Drag characters to the battlefield</h3>
+                    <div class="character-pool" id="character-pool-container"></div>
+                    <div id="selection-status" class="status-text hidden">
+                        <span data-i18n-text="selection_status">Selected: </span>
+                        <span data-i18n-text="selection_none">None</span>
+                    </div>
+                </section>
             </div>
-
-            <div class="team-area team2 glass-panel">
-                <h2 class="team-name" data-i18n="team2_name">Dark Faction</h2>
-                <div class="grid" id="grid-team2"></div>
-            </div>
-        </main>
-
-        <section class="selection-panel glass-panel" id="selection-panel">
-            <h3 data-i18n="instruction">Drag characters to the battlefield</h3>
-            <div class="character-pool" id="character-pool-container"></div>
-            <div id="selection-status" class="status-text">
-                <span data-i18n-text="selection_status">Selected: </span>
-                <span data-i18n-text="selection_none">None</span>
-            </div>
-        </section>
-
-        <section class="battle-log glass-panel">
-            <div class="log-header">
-                <h3 data-i18n="battle_log_title">Battle Log</h3>
-                <button id="btn-export" class="btn btn-small" data-i18n="btn_export">💾 Export</button>
-            </div>
-            <div id="log-content"></div>
-        </section>
+        </div>
     </div>
 
     <!-- Stats Editor Modal -->
