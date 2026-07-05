@@ -267,6 +267,7 @@ function addCharacterToBoard(teamId, x, y, tpl, cellElem) {
         hp: tpl.hp,
         maxHp: tpl.hp,
         atk: tpl.atk,
+        def: tpl.def,
         element: tpl.element,
         prefKey: tpl.prefKey,
         cd: tpl.cd,
@@ -412,7 +413,9 @@ btnStart.addEventListener('click', async () => {
             (atk.element === "布" && def.element === "石頭")) {
             mult = 1.5;
         }
-        return { dmg: Math.floor(atk.atk * mult), crit: mult > 1.0 };
+        let dmg = Math.floor(atk.atk * mult) - (def.def || 0);
+        if (dmg < 1) dmg = 1;
+        return { dmg: dmg, crit: mult > 1.0 };
     };
 
     const isAlive = c => c.hp > 0;
@@ -603,3 +606,60 @@ btnExport.addEventListener('click', () => {
 });
 
 initGrids();
+
+// --- Stats Editor Modal Logic ---
+const btnEditStats = document.getElementById('btn-edit-stats');
+const statsModal = document.getElementById('stats-modal');
+const btnCloseStats = document.getElementById('btn-close-stats');
+const statsEditorContainer = document.getElementById('stats-editor-container');
+
+function renderStatsEditor() {
+    statsEditorContainer.innerHTML = '';
+    for (const key in CHARACTER_TEMPLATES) {
+        const char = CHARACTER_TEMPLATES[key];
+        const row = document.createElement('div');
+        row.className = 'stat-editor-row';
+        row.innerHTML = `
+            <div class="char-icon">${char.icon}</div>
+            <div class="stat-editor-inputs">
+                <div class="stat-input-group">
+                    <label>ATK</label>
+                    <input type="number" id="edit-atk-${key}" value="${char.atk}" min="1">
+                </div>
+                <div class="stat-input-group">
+                    <label>DEF</label>
+                    <input type="number" id="edit-def-${key}" value="${char.def}" min="0">
+                </div>
+                <div class="stat-input-group">
+                    <label>CD (sec)</label>
+                    <input type="number" id="edit-cd-${key}" value="${char.cd}" min="0.1" step="0.1">
+                </div>
+            </div>
+        `;
+        statsEditorContainer.appendChild(row);
+    }
+}
+
+if (btnEditStats) {
+    btnEditStats.addEventListener('click', () => {
+        renderStatsEditor();
+        statsModal.classList.remove('hidden');
+    });
+}
+
+if (btnCloseStats) {
+    btnCloseStats.addEventListener('click', () => {
+        for (const key in CHARACTER_TEMPLATES) {
+            const atk = parseInt(document.getElementById(`edit-atk-${key}`).value);
+            const def = parseInt(document.getElementById(`edit-def-${key}`).value);
+            const cd = parseFloat(document.getElementById(`edit-cd-${key}`).value);
+            
+            updateCharacterTemplate(key, {
+                atk: isNaN(atk) ? CHARACTER_TEMPLATES[key].atk : atk,
+                def: isNaN(def) ? CHARACTER_TEMPLATES[key].def : def,
+                cd: isNaN(cd) ? CHARACTER_TEMPLATES[key].cd : cd
+            });
+        }
+        statsModal.classList.add('hidden');
+    });
+}

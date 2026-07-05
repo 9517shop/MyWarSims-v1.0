@@ -58,6 +58,7 @@
                     </label>
                 </div>
                 <div class="action-buttons">
+                    <button id="btn-edit-stats" class="btn btn-secondary">⚙️ Edit Stats</button>
                     <button id="btn-random" class="btn btn-secondary" data-i18n="btn_random">🎲 Randomize</button>
                     <button id="btn-start" class="btn btn-primary" disabled data-i18n="btn_start">⚔️ Start Battle</button>
                     <button id="btn-reset" class="btn btn-danger hidden" data-i18n="btn_reset">🔄 Reset</button>
@@ -104,6 +105,17 @@
             </div>
             <div id="log-content"></div>
         </section>
+    </div>
+
+    <!-- Stats Editor Modal -->
+    <div id="stats-modal" class="modal-overlay hidden">
+        <div class="modal-content glass-panel">
+            <h2>⚙️ Edit Character Stats</h2>
+            <div id="stats-editor-container"></div>
+            <div class="modal-actions">
+                <button id="btn-close-stats" class="btn btn-primary">Save & Close</button>
+            </div>
+        </div>
     </div>
 
     <!-- Audio Elements -->
