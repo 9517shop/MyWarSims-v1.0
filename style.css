@@ -616,7 +616,8 @@ body {
 .battle-log {
     padding: 1.5rem;
     flex: 1; /* Take remaining height in the left column */
-    min-height: 250px;
+    height: 600px;
+    max-height: 80vh;
     display: flex;
     flex-direction: column;
 }

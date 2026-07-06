@@ -124,24 +124,42 @@ function createCell(parent, teamId, x, y) {
     });
 
     // 拖放事件支援
+    cell.addEventListener('dragenter', e => {
+        e.preventDefault(); // 有些瀏覽器需要 dragenter 也要 preventDefault
+    });
+    
     cell.addEventListener('dragover', e => {
         e.preventDefault(); // 允許 drop
         if (!cell.hasChildNodes() || draggedCharId) {
             cell.classList.add('drag-over');
         }
     });
+    
     cell.addEventListener('dragleave', () => cell.classList.remove('drag-over'));
+    
     cell.addEventListener('drop', e => {
         e.preventDefault();
         cell.classList.remove('drag-over');
         
+        let droppedClass = draggedCharClass;
+        let droppedId = draggedCharId;
+        
+        if (e.dataTransfer) {
+            const data = e.dataTransfer.getData('text/plain');
+            if (data && data.startsWith('char-')) {
+                droppedId = data;
+            } else if (data && CHARACTER_TEMPLATES[data]) {
+                droppedClass = data;
+            }
+        }
+        
         // 從下方卡片拉過來的新角色
-        if (draggedCharClass && !cell.hasChildNodes()) {
-            placeNewCharacter(teamId, x, y, draggedCharClass, cell);
+        if (droppedClass && !cell.hasChildNodes()) {
+            placeNewCharacter(teamId, x, y, droppedClass, cell);
         } 
         // 在盤面上移動既有角色
-        else if (draggedCharId) {
-            moveCharacter(draggedCharId, teamId, x, y, cell);
+        else if (droppedId) {
+            moveCharacter(droppedId, teamId, x, y, cell);
         }
     });
 
@@ -432,7 +450,7 @@ btnStart.addEventListener('click', async () => {
         const aliveTargets = targetPool.filter(checkAlive);
         if(aliveTargets.length === 0) return [];
 
-        if (attacker.tag === "HEALER") {
+        if (attacker.tag === "HEALER" || attacker.prefKey === "pref_low_hp") {
             let minHpRatio = Infinity;
             let target = null;
             for (const t of aliveTargets) {
@@ -637,9 +655,11 @@ btnStart.addEventListener('click', async () => {
             // 被動技能結算
             if (attacker.nameKey === "class_knight") {
                 attacker.cd = Math.max(0.5, (attacker.cd || 1.0) - 0.1);
+                actions.push({ type: 'knight_cd', attacker, newCd: attacker.cd });
             }
             if (attacker.nameKey === "class_gunner") {
                 attacker.atk += 3;
+                actions.push({ type: 'gunner_atk', attacker, newAtk: attacker.atk });
             }
         }
 
