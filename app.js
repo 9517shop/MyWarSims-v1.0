@@ -155,6 +155,7 @@ window.bindCharCards = function() {
         card.addEventListener('dragstart', e => {
             draggedCharClass = card.dataset.class;
             draggedCharId = null;
+            if (e.dataTransfer) e.dataTransfer.setData('text/plain', card.dataset.class);
         });
         card.addEventListener('dragend', () => draggedCharClass = null);
         
@@ -199,6 +200,12 @@ function placeNewCharacter(teamId, x, y, cls, cellElem) {
     const maxChars = parseInt(inputNumChars.value);
     const targetTeam = teamId === 1 ? team1 : team2;
     
+    // Check limit
+    if (targetTeam.length >= maxChars) {
+        alert(t("log_limit_reached", teamId, maxChars));
+        return;
+    }
+
     // Check for duplicate class in the same team
     if (targetTeam.some(c => c.nameKey === CHARACTER_TEMPLATES[cls].nameKey)) {
         alert(t("log_limit_reached", teamId, maxChars) + " (Cannot duplicate class)");
@@ -288,6 +295,7 @@ function addCharacterToBoard(teamId, x, y, tpl, cellElem) {
     charDom.addEventListener('dragstart', e => {
         draggedCharId = charObj.id;
         draggedCharClass = null;
+        if (e.dataTransfer) e.dataTransfer.setData('text/plain', charObj.id);
         charDom.classList.add('dragging');
         setTimeout(() => {
             charDom.style.opacity = '0';

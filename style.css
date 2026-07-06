@@ -303,7 +303,7 @@ body {
 .main-content-row {
     display: flex;
     gap: 2rem;
-    align-items: stretch;
+    align-items: flex-start;
 }
 
 .main-left {
