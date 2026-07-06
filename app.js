@@ -764,10 +764,10 @@ if (btnCloseStats) {
 const btnExportStats = document.getElementById("btn-export-stats");
 if (btnExportStats) {
     btnExportStats.addEventListener("click", () => {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(CHARACTER_TEMPLATES, null, 2));
+        const dataStr = "data:text/plain;charset=utf-8," + encodeURIComponent(JSON.stringify(CHARACTER_TEMPLATES, null, 2));
         const a = document.createElement("a");
         a.setAttribute("href", dataStr);
-        a.setAttribute("download", "warsims_stats.json");
+        a.setAttribute("download", "warsims_stats.txt");
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -794,7 +794,7 @@ if (inputImportStats) {
                 renderGrids();
                 alert("Stats imported successfully!");
             } catch (err) {
-                alert("Invalid JSON file.");
+                alert("Invalid file format. Please ensure it is a valid format.");
             }
         };
         reader.readAsText(file);

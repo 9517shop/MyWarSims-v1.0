@@ -15,9 +15,10 @@
     </div>
 
     <div id="game-container">
-        <header class="game-header">
-            <!-- 絕對定位在右上角的設定區 -->
-            <div class="top-right-controls">
+        <!-- 第 1 橫排：大標題與設定 -->
+        <div class="top-row">
+            <h1 class="title" data-i18n="title">WarSims <span class="highlight">Clash</span></h1>
+            <div class="top-right-settings">
                 <div class="lang-selector">
                     <select id="lang-select" onchange="switchLanguage(this.value)">
                         <option value="zh-TW">繁體中文</option>
@@ -37,12 +38,11 @@
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- 正上方的大標題 -->
-            <h1 class="title" data-i18n="title">WarSims <span class="highlight">Clash</span></h1>
-            
-            <!-- 下方的控制列 -->
-            <div class="controls glass-panel">
+        <!-- 第 2 橫排：操作控制列 -->
+        <div class="controls-row glass-panel">
+            <div class="controls-left">
                 <div class="control-group">
                     <label>
                         <span data-i18n-text="max_chars_label">Max Units: </span>
@@ -59,18 +59,24 @@
                         </select>
                     </label>
                 </div>
-                <div class="action-buttons">
-                    <button id="btn-edit-stats" class="btn btn-secondary">🪖 Edit Stats</button>
-                    <button id="btn-random" class="btn btn-secondary" data-i18n="btn_random">🎲 Randomize</button>
-                    <button id="btn-start" class="btn btn-primary" disabled data-i18n="btn_start">⚔️ Start</button>
-                    <button id="btn-reset" class="btn btn-danger hidden" data-i18n="btn_reset">🔄 Reset</button>
-                </div>
+                <button id="btn-random" class="btn btn-secondary" data-i18n="btn_random">🎲 Randomize</button>
             </div>
-        </header>
+            
+            <div class="controls-center">
+                <button id="btn-start" class="btn btn-primary btn-large" disabled data-i18n="btn_start">⚔️ Start Battle</button>
+                <button id="btn-reset" class="btn btn-danger hidden" data-i18n="btn_reset">🔄 Reset</button>
+            </div>
+            
+            <div class="controls-right">
+                <button id="btn-edit-stats" class="btn btn-secondary">🪖 Edit Stats</button>
+            </div>
+        </div>
 
-        <div class="main-layout">
-            <!-- 左邊欄：戰場與紀錄 -->
-            <div class="layout-left">
+        <!-- 第 3 橫排：主畫面 (左側戰場+卡池, 右側日誌) -->
+        <div class="main-content-row">
+            <!-- 左側區域 -->
+            <div class="main-left">
+                <!-- 戰場 -->
                 <main class="battlefield-container">
                     <div class="team-area team1 glass-panel">
                         <h2 class="team-name" data-i18n="team1_name">Light Faction</h2>
@@ -87,24 +93,20 @@
                     </div>
                 </main>
 
+                <!-- 角色拖曳池 (正下方水平排列) -->
+                <section class="selection-panel glass-panel" id="selection-panel">
+                    <div class="character-pool" id="character-pool-container"></div>
+                </section>
+            </div>
+
+            <!-- 右側區域：戰鬥紀錄 -->
+            <div class="main-right">
                 <section class="battle-log glass-panel">
                     <div class="log-header">
                         <h3 data-i18n="battle_log_title">Battle Log</h3>
                         <button id="btn-export" class="btn btn-small" data-i18n="btn_export">💾 Export</button>
                     </div>
                     <div id="log-content"></div>
-                </section>
-            </div>
-
-            <!-- 右邊欄：角色拖曳池 -->
-            <div class="layout-right">
-                <section class="selection-panel glass-panel" id="selection-panel">
-                    <h3 data-i18n="instruction">Drag characters to the battlefield</h3>
-                    <div class="character-pool" id="character-pool-container"></div>
-                    <div id="selection-status" class="status-text hidden">
-                        <span data-i18n-text="selection_status">Selected: </span>
-                        <span data-i18n-text="selection_none">None</span>
-                    </div>
                 </section>
             </div>
         </div>
