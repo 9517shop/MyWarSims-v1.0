@@ -558,6 +558,8 @@ btnStart.addEventListener('click', async () => {
         let anyoneDied = false;
         const dmgTexts = [];
 
+
+
         for (const attacker of currentAttackers) {
             attacker.dom.classList.add(attacker.team === 1 ? 'anim-attack-t1' : 'anim-attack-t2');
         }
@@ -726,6 +728,7 @@ function renderStatsEditor() {
         `;
         statsEditorContainer.appendChild(row);
     }
+    renderCharacterPool();
 }
 
 if (btnEditStats) {
@@ -737,6 +740,9 @@ if (btnEditStats) {
 
 if (btnCloseStats) {
     btnCloseStats.addEventListener('click', () => {
+        // Save to localStorage
+        localStorage.setItem("warsims_stats", JSON.stringify(CHARACTER_TEMPLATES));
+        
         for (const key in CHARACTER_TEMPLATES) {
             const hp = parseInt(document.getElementById(`edit-hp-${key}`).value);
             const atk = parseInt(document.getElementById(`edit-atk-${key}`).value);
@@ -751,5 +757,47 @@ if (btnCloseStats) {
             });
         }
         statsModal.classList.add('hidden');
+    });
+}
+
+// --- Stats Export / Import ---
+const btnExportStats = document.getElementById("btn-export-stats");
+if (btnExportStats) {
+    btnExportStats.addEventListener("click", () => {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(CHARACTER_TEMPLATES, null, 2));
+        const a = document.createElement("a");
+        a.setAttribute("href", dataStr);
+        a.setAttribute("download", "warsims_stats.json");
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    });
+}
+
+const inputImportStats = document.getElementById("input-import-stats");
+if (inputImportStats) {
+    inputImportStats.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const parsed = JSON.parse(evt.target.result);
+                for (const classId in parsed) {
+                    if (CHARACTER_TEMPLATES[classId]) {
+                        updateCharacterTemplate(classId, parsed[classId]);
+                    }
+                }
+                localStorage.setItem("warsims_stats", JSON.stringify(CHARACTER_TEMPLATES));
+                renderStatsEditor();
+                renderCharacterPool();
+                renderGrids();
+                alert("Stats imported successfully!");
+            } catch (err) {
+                alert("Invalid JSON file.");
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = ""; 
     });
 }
