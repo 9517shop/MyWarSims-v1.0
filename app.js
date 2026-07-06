@@ -199,11 +199,11 @@ function placeNewCharacter(teamId, x, y, cls, cellElem) {
     const maxChars = parseInt(inputNumChars.value);
     const targetTeam = teamId === 1 ? team1 : team2;
     
-    // 測試用：取消滿員限制，允許繼續增員
-    // if (targetTeam.length >= maxChars) {
-    //     logMessage(t("log_limit_reached", teamId, maxChars));
-    //     return;
-    // }
+    // Check for duplicate class in the same team
+    if (targetTeam.some(c => c.nameKey === CHARACTER_TEMPLATES[cls].nameKey)) {
+        alert(t("log_limit_reached", teamId, maxChars) + " (Cannot duplicate class)");
+        return;
+    }
 
     addCharacterToBoard(teamId, x, y, CHARACTER_TEMPLATES[cls], cellElem);
     checkReady();
@@ -324,8 +324,9 @@ btnRandom.addEventListener('click', () => {
         for(let x=0; x<3; x++) for(let y=0; y<3; y++) positions.push({x, y});
         positions.sort(() => Math.random() - 0.5);
         
-        for(let i=0; i<maxChars; i++) {
-            const cls = classes[Math.floor(Math.random() * classes.length)];
+        let shuffledClasses = [...classes].sort(() => Math.random() - 0.5);
+        for(let i=0; i<Math.min(maxChars, shuffledClasses.length); i++) {
+            const cls = shuffledClasses[i];
             const pos = positions[i];
             const cell = gridElem.querySelector(`.cell[data-x="${pos.x}"][data-y="${pos.y}"]`);
             addCharacterToBoard(teamId, pos.x, pos.y, CHARACTER_TEMPLATES[cls], cell);
@@ -466,11 +467,18 @@ btnStart.addEventListener('click', async () => {
         }
     };
 
-    // 初始化所有角色的 nextAttackTime
+    // 初始化所有角色的狀態與時間
     for (const c of [...team1, ...team2]) {
         c.maxHp = c.maxHp || c.hp;
+        c.bleed = 0;
+        c.burn = 0;
+        c.poison = 0;
+        c.shield = 0;
+        c.nextBurnTime = Infinity;
+        c.nextPoisonTime = Infinity;
+
         if (c.nameKey === "class_assassin") {
-            c.nextAttackTime = 0.0; // 刺客先手
+            c.nextAttackTime = 0.0;
         } else {
             c.nextAttackTime = c.cd || 1.0;
         }
@@ -482,13 +490,72 @@ btnStart.addEventListener('click', async () => {
         const living = [...team1, ...team2].filter(isAlive);
         if(living.length === 0) break;
 
-        living.sort((a, b) => a.nextAttackTime - b.nextAttackTime);
-        simTime = living[0].nextAttackTime;
-
-        // 收集所有在同一時間點發動攻擊的角色（同步判定）
+        // 找最近的事件時間 (攻擊、燃燒、中毒)
+        let nextEventTime = Infinity;
+        for (const c of living) {
+            if (c.nextAttackTime < nextEventTime) nextEventTime = c.nextAttackTime;
+            if (c.nextBurnTime < nextEventTime) nextEventTime = c.nextBurnTime;
+            if (c.nextPoisonTime < nextEventTime) nextEventTime = c.nextPoisonTime;
+        }
+        
+        simTime = nextEventTime;
         const currentAttackers = living.filter(c => Math.abs(c.nextAttackTime - simTime) <= 0.0001);
+        const currentBurners = living.filter(c => Math.abs(c.nextBurnTime - simTime) <= 0.0001);
+        const currentPoisoners = living.filter(c => Math.abs(c.nextPoisonTime - simTime) <= 0.0001);
 
         const actions = [];
+        let anyoneDied = false;
+        const dmgTexts = [];
+        let playHitSound = false;
+        let playCritSound = false;
+        let playMagicSound = false;
+
+        // 處理狀態異常 Tick (燃燒、中毒)
+        for (const c of currentBurners) {
+            if (c.burn > 0) {
+                const dmg = c.burn;
+                c.hp = Math.max(0, c.hp - dmg);
+                
+                const translatedTargetName = t(c.nameKey);
+                logMessage(t("log_status_burn", simTime.toFixed(1), c.team, c.icon, translatedTargetName, dmg));
+                
+                const dmgText = document.createElement('div');
+                dmgText.className = 'damage-text';
+                dmgText.style.color = '#ff9800'; // Orange for burn
+                dmgText.innerText = '-' + dmg;
+                c.dom.parentElement.appendChild(dmgText);
+                dmgTexts.push({text: dmgText, target: c});
+                c.dom.classList.add('anim-fireball'); // Reusing fireball for burn flash
+
+                c.burn -= 1;
+                if (c.burn > 0) c.nextBurnTime = simTime + 1.0;
+                else c.nextBurnTime = Infinity;
+            } else {
+                c.nextBurnTime = Infinity;
+            }
+        }
+
+        for (const c of currentPoisoners) {
+            if (c.poison > 0) {
+                const dmg = c.poison;
+                c.hp = Math.max(0, c.hp - dmg);
+                
+                const translatedTargetName = t(c.nameKey);
+                logMessage(t("log_status_poison", simTime.toFixed(1), c.team, c.icon, translatedTargetName, dmg));
+                
+                const dmgText = document.createElement('div');
+                dmgText.className = 'damage-text';
+                dmgText.style.color = '#9c27b0'; // Purple for poison
+                dmgText.innerText = '-' + dmg;
+                c.dom.parentElement.appendChild(dmgText);
+                dmgTexts.push({text: dmgText, target: c});
+                c.dom.classList.add('anim-magic-hit');
+                
+                c.nextPoisonTime = simTime + 3.0;
+            } else {
+                c.nextPoisonTime = Infinity;
+            }
+        }
 
         // 初始化 Projected HP
         for (const t of [...team1, ...team2]) {
@@ -497,6 +564,7 @@ btnStart.addEventListener('click', async () => {
 
         // 階段一：所有攻擊者同時鎖定目標與計算預計數值
         for (const attacker of currentAttackers) {
+            if (!isAlive(attacker)) continue; // 可能被剛才的狀態異常跳死
             const defenders = attacker.team === 1 ? team2 : team1;
             const allies = attacker.team === 1 ? team1 : team2;
             
@@ -536,36 +604,53 @@ btnStart.addEventListener('click', async () => {
                             let { dmg, crit } = calcDamage(attacker, target);
                             if (isSkill) dmg *= 2; // Skill DMG x2
                             
+                            // Shield mechanic
+                            let shieldBlocked = false;
+                            if (target.shield > 0) {
+                                dmg = 0;
+                                target.shield -= 1;
+                                shieldBlocked = true;
+                            }
+
+                            // Bleed mechanic triggers on attack
+                            let bleedDmg = 0;
+                            if (target.bleed > 0) {
+                                bleedDmg = target.bleed;
+                                dmg += bleedDmg;
+                            }
+                            
                             target.projectedHp -= dmg;
-                            actions.push({ type: 'damage', attacker, target, amount: dmg, crit, isMagic, isSkill });
+                            actions.push({ type: 'damage', attacker, target, amount: dmg, crit, isMagic, isSkill, shieldBlocked, bleedDmg });
                         }
                     }
                 }
             }
+            
+            // 被動技能結算
+            if (attacker.nameKey === "class_knight") {
+                attacker.cd = Math.max(0.5, (attacker.cd || 1.0) - 0.1);
+            }
+            if (attacker.nameKey === "class_gunner") {
+                attacker.atk += 3;
+            }
         }
 
-        if (actions.length === 0) {
+        if (actions.length === 0 && currentBurners.length === 0 && currentPoisoners.length === 0) {
             for (const attacker of currentAttackers) {
-                attacker.nextAttackTime = simTime + (attacker.cd || 1.0);
+                attacker.nextAttackTime = simTime + Math.max(0.5, (attacker.cd || 1.0));
             }
             continue;
         }
 
-        // 階段二：同時結算所有傷害與治療
-        let playCritSound = false;
-        let playHitSound = false;
-        let playMagicSound = false;
-        let anyoneDied = false;
-        const dmgTexts = [];
-
-
-
+        // 階段二：結算攻擊行為 (如果有)
         for (const attacker of currentAttackers) {
-            attacker.dom.classList.add(attacker.team === 1 ? 'anim-attack-t1' : 'anim-attack-t2');
+            if (isAlive(attacker)) {
+                attacker.dom.classList.add(attacker.team === 1 ? 'anim-attack-t1' : 'anim-attack-t2');
+            }
         }
 
         for (const action of actions) {
-            const { type, attacker, target, amount, crit, isMagic, isSkill } = action;
+            const { type, attacker, target, amount, crit, isMagic, isSkill, shieldBlocked, bleedDmg } = action;
             
             if (type === 'heal') {
                 if (isAlive(target)) {
@@ -574,14 +659,19 @@ btnStart.addEventListener('click', async () => {
                 target.dom.classList.add('anim-heal');
                 
                 const dmgText = document.createElement('div');
-                dmgText.className = `damage-text heal`;
-                dmgText.innerText = `+${amount}`;
+                dmgText.className = 'damage-text heal';
+                dmgText.innerText = '+' + amount;
                 target.dom.parentElement.appendChild(dmgText);
                 dmgTexts.push({text: dmgText, target});
 
                 logI18n('{content}', "log_heal", [simTime.toFixed(1), attacker.team, attacker.icon, attacker.nameKey, target.team, target.icon, target.nameKey, amount]);
                 playMagicSound = true;
             } else {
+                // 狗的被動：每次攻擊賦予1層出血
+                if (attacker.nameKey === "class_dog") {
+                    target.bleed += 1;
+                }
+
                 target.hp = Math.max(0, target.hp - amount);
 
                 if (isSkill) {
@@ -598,33 +688,35 @@ btnStart.addEventListener('click', async () => {
                 else playHitSound = true;
 
                 const dmgText = document.createElement('div');
-                dmgText.className = `damage-text ${crit ? 'crit' : ''}`;
-                dmgText.innerText = `-${amount}`;
+                dmgText.className = 'damage-text ' + (crit ? 'crit' : '');
+                dmgText.innerText = shieldBlocked && amount === 0 ? "🛡️ BLOCKED" : '-' + amount;
                 target.dom.parentElement.appendChild(dmgText);
                 dmgTexts.push({text: dmgText, target});
 
                 const critArg = crit ? "log_crit" : "log_no_crit";
                 if (isSkill && target === action.target) {
-                    // Only log skill once per target or once total? Let's just log normally, and add skill log
                     logI18n('{content}', "log_skill_warlock", [simTime.toFixed(1), attacker.team, attacker.icon, attacker.nameKey]);
                 } else {
-                    logI18n('{content}', "log_attack", [simTime.toFixed(1), attacker.team, attacker.icon, attacker.nameKey, target.team, target.icon, target.nameKey, critArg, amount]);
+                    let logStr = t("log_attack", simTime.toFixed(1), attacker.team, attacker.icon, t(attacker.nameKey), target.team, target.icon, t(target.nameKey), t(critArg), amount);
+                    if (shieldBlocked) logStr += " " + t("log_status_shield");
+                    if (bleedDmg > 0) logStr += " " + t("log_status_bleed", bleedDmg);
+                    logMessage(logStr);
                 }
             }
         }
 
-        // 更新血條並判定死亡 (在所有傷害都結算後統一判定)
-        const uniqueTargets = [...new Set(actions.map(a => a.target))];
-        for (const target of uniqueTargets) {
+        // 更新血條並判定死亡
+        const allTargets = [...new Set([...actions.map(a => a.target), ...currentBurners, ...currentPoisoners])];
+        for (const target of allTargets) {
             const hpPercent = (target.hp / target.maxHp) * 100;
-            target.hpBar.style.width = `${hpPercent}%`;
+            target.hpBar.style.width = hpPercent + '%';
             
             if(hpPercent < 30 && hpPercent > 0) target.hpBar.classList.add('low');
             else target.hpBar.classList.remove('low');
 
             if(!isAlive(target) && !target.dom.classList.contains('anim-die')) {
                 target.dom.classList.add('anim-die');
-                logI18n('<span class="log-death">{content}</span>', "log_death", [simTime.toFixed(1), target.icon, target.nameKey]);
+                logMessage('<span class="log-death">' + t("log_death", simTime.toFixed(1), target.icon, t(target.nameKey)) + '</span>');
                 anyoneDied = true;
             }
         }
@@ -640,11 +732,11 @@ btnStart.addEventListener('click', async () => {
 
         for (const attacker of currentAttackers) {
             attacker.dom.classList.remove('anim-attack-t1', 'anim-attack-t2');
-            attacker.nextAttackTime = simTime + (attacker.cd || 1.0);
+            attacker.nextAttackTime = simTime + Math.max(0.5, (attacker.cd || 1.0));
         }
 
         for (const dt of dmgTexts) {
-            dt.target.dom.classList.remove('anim-hit', 'anim-magic-hit', 'anim-heal');
+            dt.target.dom.classList.remove('anim-hit', 'anim-magic-hit', 'anim-heal', 'anim-fireball');
             dt.text.remove();
         }
 
@@ -705,8 +797,21 @@ function renderStatsEditor() {
         const char = CHARACTER_TEMPLATES[key];
         const row = document.createElement('div');
         row.className = 'stat-editor-row';
+        
+        const translatedName = typeof t === "function" ? t(char.nameKey) : char.nameKey;
+        const translatedPrefLabel = typeof t === "function" ? t("pref_label") : "優先: ";
+        const translatedPref = typeof t === "function" ? t(char.prefKey) : char.prefKey;
+        const cdLabel = typeof t === "function" ? t("cd_label", char.cd) : ` | CD: ${char.cd}s`;
+        
         row.innerHTML = `
-            <div class="char-icon">${char.icon}</div>
+            <div class="char-icon">
+                ${char.icon}
+                <div class="info">
+                    <strong>${translatedName}</strong>
+                    <span>HP:${char.hp} | ATK:${char.atk} | DEF:${char.def}${cdLabel}</span>
+                    <span>${translatedPrefLabel}${translatedPref}</span>
+                </div>
+            </div>
             <div class="stat-editor-inputs">
                 <div class="stat-input-group">
                     <label>HP</label>

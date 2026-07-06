@@ -5,7 +5,10 @@ const CHARACTER_TEMPLATES = {
     "Mage": { classId: "Mage", nameKey: "class_mage", icon: "🔮", hp: 80, atk: 19, def: 1, prefKey: "pref_crowd", cd: 1.5 },
     "Healer": { classId: "Healer", nameKey: "class_healer", icon: "💖", hp: 100, atk: 30, def: 5, prefKey: "pref_low_hp", cd: 1.5, tag: "HEALER" },
     "Fighter": { classId: "Fighter", nameKey: "class_fighter", icon: "⚔️", hp: 110, atk: 18, def: 2, prefKey: "pref_front", cd: 1.2, multiHit: 2 },
-    "Warlock": { classId: "Warlock", nameKey: "class_warlock", icon: "🔥🪄", hp: 70, atk: 25, def: 1, prefKey: "pref_crowd", cd: 1.5, skillCast: 3 }
+    "Warlock": { classId: "Warlock", nameKey: "class_warlock", icon: "🔥🪄", hp: 70, atk: 25, def: 1, prefKey: "pref_crowd", cd: 1.5, skillCast: 3 },
+    "Knight": { classId: "Knight", nameKey: "class_knight", icon: "🐴", hp: 150, atk: 15, def: 3, prefKey: "pref_front", cd: 1.2 },
+    "Gunner": { classId: "Gunner", nameKey: "class_gunner", icon: "🔫", hp: 85, atk: 22, def: 1, prefKey: "pref_back", cd: 1.0 },
+    "Dog": { classId: "Dog", nameKey: "class_dog", icon: "🐕", hp: 75, atk: 12, def: 1, prefKey: "pref_low_hp", cd: 0.8 }
 };
 
 function updateCharacterTemplate(classId, updates) {
